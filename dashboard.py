@@ -1,41 +1,21 @@
-# dashboard.py
-# La interfaz de usuario para la Plataforma de Ciberseguridad Unificada.
+# dashboard.py (versión corregida)
 
 import streamlit as st
 import pandas as pd
 import asyncio
 import nest_asyncio
 
-# Aplicamos el parche para permitir bucles de eventos anidados
 nest_asyncio.apply()
 
-# ¡CORREGIDO! Usamos la ruta a nuestro módulo
 from modules.subdomain_finder import find_subdomains
 from modules.validate import validate_subdomains_concurrently
-# ¡CORREGIDO! Apuntamos a nuestro detector de tecnologías
-from modules.tech_detector import detect_technologies 
+from modules.orchestrator import run_full_tech_scan
 
 st.set_page_config(page_title="Plataforma de Ciberseguridad", page_icon="🛡️", layout="wide")
 
-# ... (El resto del código que proporcionaste es correcto y se puede pegar aquí tal cual) ...
-# (Pega aquí el resto de tu código de dashboard.py)
-def run_async_scan(func, data):
-    """Helper para ejecutar cualquier función de escaneo asíncrona."""
-    # Este helper es un poco simplificado, vamos a ajustarlo
-    # para que maneje la lógica de nuestro tech_scanner que no es async
-    if func.__name__ == 'validate_subdomains_concurrently':
-        return asyncio.run(func(data))
-    elif func.__name__ == 'detect_technologies':
-        # Esta función no es async, así que la llamamos directamente
-        # y procesamos la lista de subdominios.
-        results = []
-        for sub_data in data:
-            tech = func(sub_data['url'])
-            sub_data['technologies'] = tech
-            results.append(sub_data)
-        return results
+def run_async_function(func, *args):
+    return asyncio.run(func(*args))
 
-# Initialize session state variables
 if 'scan_results' not in st.session_state:
     st.session_state.scan_results = None
 if 'domain_scanned' not in st.session_state:
@@ -44,26 +24,24 @@ if 'found_count' not in st.session_state:
     st.session_state.found_count = 0
 
 st.title("🛡️ Plataforma de Ciberseguridad Unificada")
-target_domain = st.text_input("Ingresa un dominio para analizar", placeholder="example.com")
+target_domain = st.text_input("Ingresa un dominio para analizar", placeholder="prowessec.com")
 
-if st.button("Iniciar Análisis"):
+if st.button("Iniciar Análisis Profundo"):
     if target_domain:
         st.session_state.scan_results = None
-
-        with st.spinner("Fase 1/3: Descubriendo subdominios..."):
-            # Usamos la ruta que ya tenemos configurada
+        with st.spinner("Fase 1/3: Descubriendo subdominios (Sublist3r)..."):
             found_subdomains = find_subdomains(target_domain, "sublist3r/sublist3r.py")
         st.session_state.found_count = len(found_subdomains)
         if not found_subdomains:
             st.warning("No se descubrieron subdominios."); st.stop()
 
         with st.spinner(f"Fase 2/3: Validando {len(found_subdomains)} subdominios..."):
-            active_subdomains = run_async_scan(validate_subdomains_concurrently, found_subdomains)
+            active_subdomains = run_async_function(validate_subdomains_concurrently, found_subdomains)
         if not active_subdomains:
             st.warning("No se encontraron sitios activos."); st.stop()
 
-        with st.spinner(f"Fase 3/3: Detectando tecnologías en {len(active_subdomains)} sitios activos..."):
-            results_with_tech = run_async_scan(detect_technologies, active_subdomains)
+        with st.spinner(f"Fase 3/3: Realizando escaneo profundo de tecnologías en {len(active_subdomains)} sitios..."):
+            results_with_tech = run_async_function(run_full_tech_scan, active_subdomains)
 
         st.session_state.scan_results = results_with_tech
         st.session_state.domain_scanned = target_domain
@@ -78,36 +56,24 @@ if st.session_state.scan_results is not None:
     found_count = st.session_state.found_count
 
     st.subheader(f"Resultados para: {domain}")
-
     col1, col2 = st.columns(2)
     col1.metric("Subdominios Descubiertos", found_count)
     col2.metric("Sitios Activos Analizados", len(results))
-
     st.divider()
 
-    st.write("#### Tabla de Tecnologías Detectadas")
+    st.write("#### Tabla de Tecnologías Detectadas (Escaneo Profundo)")
     
-    # Convertimos los resultados a un formato que Pandas pueda manejar
     display_data = []
     for item in results:
         tech_list = item.get('technologies')
         if tech_list:
-            for tech in tech_list:
-                display_data.append({
-                    'Subdominio': item['subdomain'],
-                    'URL': item['url'],
-                    'Tecnología Detectada': tech['name']
-                })
+            tech_names = ", ".join(sorted([t['name'] for t in tech_list]))
+            display_data.append({'Subdominio': item['subdomain'], 'URL': item['url'], 'Tecnologías': tech_names})
         else:
-             display_data.append({
-                    'Subdominio': item['subdomain'],
-                    'URL': item['url'],
-                    'Tecnología Detectada': 'N/A'
-                })
+             display_data.append({'Subdominio': item['subdomain'], 'URL': item['url'], 'Tecnologías': 'N/A'})
 
     df_display = pd.DataFrame(display_data)
-
-    st.dataframe(
-            df_display, 
-            use_container_width=True
-        )
+    
+    # --- ¡AQUÍ ESTÁ LA CORRECCIÓN! ---
+    # La advertencia era sobre un futuro cambio, esta sintaxis es la correcta por ahora.
+    st.dataframe(df_display, use_container_width=True)
