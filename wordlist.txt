@@ -1,0 +1,28 @@
+# Archivos de configuración y backups
+.env
+.env.local
+.env.backup
+config.php.bak
+backup
+backup.zip
+backup.tar.gz
+database.sql
+
+# Directorios comunes
+admin
+administrator
+login
+dashboard
+admin-panel
+uploads
+wp-admin
+wp-login.php
+
+# Código fuente expuesto
+.git
+.svn
+
+# Archivos de logs
+logs
+log.txt
+error.log
