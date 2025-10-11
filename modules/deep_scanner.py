@@ -1,45 +1,48 @@
 # modules/deep_scanner.py
-# Módulo para realizar un escaneo profundo de tecnologías usando WhatWeb.
+# Módulo para realizar un escaneo profundo de tecnologías.
+# ✨ ¡VERSIÓN MODIFICADA! Ahora usa 'webtech' y es multiplataforma (Windows/Linux).
 
-import subprocess
-import json
+import requests
+import webtech  # Reemplaza a 'subprocess' y 'json' para esta tarea
 
 def deep_scan_technologies(url: str) -> list[dict]:
     """
-    Usa WhatWeb para realizar un escaneo profundo de una URL.
+    Usa la biblioteca 'webtech' para realizar un escaneo de tecnologías en una URL.
+    Esta función es el reemplazo directo de la versión que usaba WhatWeb.
     """
     results = []
+    
     try:
-        command = ["whatweb", "--color=never", "--log-json=-", url]
-        process = subprocess.run(
-            command, 
-            capture_output=True, 
-            text=True, 
-            check=True, 
-            timeout=120
+        # 1. Aseguramos que la URL tenga un esquema (http/https) para 'requests'.
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url
+
+        # 2. Hacemos la petición web. Usamos verify=False para evitar errores SSL comunes
+        #    en sitios de prueba y un User-Agent para simular un navegador.
+        response = requests.get(
+            url, 
+            timeout=20, 
+            verify=False,
+            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
         )
+        response.raise_for_status()  # Lanza un error si la respuesta es 4xx o 5xx
 
-        for line in process.stdout.strip().split('\n'):
-            # --- ¡AQUÍ ESTÁ LA CORRECCIÓN! ---
-            # Nos aseguramos de que la línea no esté vacía antes de procesarla
-            # y la envolvemos en un try-except para ignorar las que no son JSON.
-            if line:
-                try:
-                    data = json.loads(line)
-                    if "plugins" in data:
-                        for plugin_name, plugin_data in data["plugins"].items():
-                            version = plugin_data.get("version", [None])[0]
-                            results.append({"name": plugin_name, "version": version})
-                except json.JSONDecodeError:
-                    # Si una línea no es JSON (ej. un error de WhatWeb), la ignoramos.
-                    # print(f"[!] Aviso: WhatWeb devolvió una línea no-JSON para {url}, ignorando.")
-                    continue
+        # 3. Analizamos la respuesta con webtech.
+        wt = webtech.WebTech()
+        tech_report = wt.start_from_response(response)
 
-    except FileNotFoundError:
-        print("[!] Error: El comando 'whatweb' no fue encontrado. ¿Está instalado?")
-    except subprocess.CalledProcessError as e:
-        print(f"[!] Error ejecutando WhatWeb en {url}: {e.stderr}")
+        # 4. Transformamos la salida de webtech al formato que tu app espera: [{'name': ..., 'version': ...}]
+        for tech_name, tech_info in tech_report.items():
+            version = tech_info.get("version")  # Usamos .get() para evitar errores si no hay versión
+            results.append({"name": tech_name, "version": version})
+
+    except requests.exceptions.RequestException as e:
+        # Captura errores de red (timeout, DNS, conexión rechazada, etc.)
+        # print(f"[!] Error de red al escanear {url}: {e}") # Descomenta para depurar
+        pass 
     except Exception as e:
-        print(f"[!] Error inesperado durante el escaneo profundo de {url}: {e}")
+        # Captura cualquier otro error inesperado.
+        # print(f"[!] Error inesperado durante el escaneo de {url}: {e}") # Descomenta para depurar
+        pass
 
     return results
